@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f8f8f3">
+  <meta name="description" content="Encuentra rutas verificadas, explora Colombia y camina con guías locales en EcoRuta.">
+  <title>EcoRuta — Explora Colombia a pie</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            forest: '#183B2B',
+            moss: '#597A4A',
+            leaf: '#B8D682',
+            paper: '#F8F8F3',
+            ink: '#1D2821',
+            muted: '#778078',
+            line: '#E7E9E2',
+            clay: '#E9784B'
+          },
+          fontFamily: {
+            sans: ['DM Sans', 'sans-serif'],
+            display: ['Manrope', 'sans-serif']
+          },
+          boxShadow: {
+            card: '0 12px 34px rgba(24, 59, 43, .08)',
+            soft: '0 4px 18px rgba(24, 59, 43, .06)'
+          }
+        }
+      }
+    };
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    :root { color-scheme: light; }
+    * { -webkit-tap-highlight-color: transparent; }
+    body { min-width: 320px; }
+    button, input, select { font: inherit; }
+    button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible {
+      outline: 3px solid rgba(89, 122, 74, .38);
+      outline-offset: 3px;
+    }
+    .screen { display: none; }
+    .screen.active { display: block; }
+    .hide-scrollbar { scrollbar-width: none; }
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+    .route-photo { background-size: cover; background-position: center; }
+    .leaflet-container { font-family: 'DM Sans', sans-serif; }
+    .leaflet-control-attribution { font-size: 9px !important; }
+    .leaflet-popup-content-wrapper { border-radius: 14px; }
+    .leaflet-popup-content { margin: 12px 14px; }
+    .safe-bottom { padding-bottom: max(10px, env(safe-area-inset-bottom)); }
+    .modal-backdrop { background: rgba(12, 25, 17, .52); backdrop-filter: blur(4px); }
+    .toast-enter { animation: toast-in .24s ease-out both; }
+    @keyframes toast-in { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
+    @media (min-width: 768px) {
+      .screen-shell { max-width: 1120px; }
+    }
+  </style>
+</head>
+<body class="bg-paper font-sans text-ink antialiased">
+  <div class="min-h-screen">
+    <main class="screen-shell mx-auto min-h-screen max-w-[1120px]">
+      <!-- Authentication -->
+      <section id="loginScreen" class="screen min-h-screen bg-white px-6 pb-10 pt-7 md:flex md:items-center md:justify-center md:bg-paper">
+        <div class="mx-auto w-full max-w-[420px] md:rounded-[32px] md:bg-white md:p-10 md:shadow-card">
+          <div class="flex items-center justify-between text-[11px] font-semibold text-ink/60">
+            <span>9:41</span><span class="flex gap-1"><i class="fa-solid fa-signal"></i><i class="fa-solid fa-wifi"></i><i class="fa-solid fa-battery-three-quarters"></i></span>
+          </div>
+          <div class="mt-12 text-center md:mt-6">
+            <div class="mx-auto flex h-[76px] w-[76px] items-center justify-center rounded-[25px] bg-leaf/35 text-forest">
+              <i class="fa-solid fa-mountain-sun text-[31px]" aria-hidden="true"></i>
+            </div>
+            <p class="mt-4 font-display text-[26px] font-extrabold tracking-tight">Eco<span class="text-moss">Ruta</span></p>
+            <h1 id="authHeading" class="mt-2 font-display text-xl font-bold">Qué bueno tenerte aquí</h1>
+            <p id="authSubheading" class="mt-1 text-sm text-muted">Inicia sesión y encuentra tu próxima aventura.</p>
+          </div>
+          <form id="authForm" class="mt-8 space-y-4">
+            <div id="nameField" class="hidden">
+              <label for="authName" class="mb-1.5 block text-xs font-semibold text-ink/75">Nombre completo</label>
+              <div class="flex h-12 items-center gap-3 rounded-2xl border border-line px-4 focus-within:border-moss">
+                <i class="fa-regular fa-user text-muted"></i>
+                <input id="authName" autocomplete="name" class="w-full bg-transparent text-sm outline-none" placeholder="Tu nombre">
+              </div>
+            </div>
+            <div>
+              <label for="authEmail" class="mb-1.5 block text-xs font-semibold text-ink/75">Correo electrónico</label>
+              <div class="flex h-12 items-center gap-3 rounded-2xl border border-line px-4 focus-within:border-moss">
+                <i class="fa-regular fa-envelope text-muted"></i>
+                <input id="authEmail" type="email" autocomplete="email" required class="w-full bg-transparent text-sm outline-none" placeholder="hola@correo.com">
+              </div>
+            </div>
+            <div>
+              <div class="mb-1.5 flex items-center justify-between">
+                <label for="authPassword" class="text-xs font-semibold text-ink/75">Contraseña</label>
+                <button id="forgotPassword" type="button" class="text-xs font-semibold text-moss hover:text-forest">¿La olvidaste?</button>
+              </div>
+              <div class="flex h-12 items-center gap-3 rounded-2xl border border-line px-4 focus-within:border-moss">
+                <i class="fa-solid fa-lock text-muted"></i>
+                <input id="authPassword" type="password" autocomplete="current-password" minlength="6" required class="w-full bg-transparent text-sm outline-none" placeholder="Mínimo 6 caracteres">
+              </div>
+            </div>
+            <p class="-mt-1 text-[11px] leading-5 text-muted"><i class="fa-solid fa-circle-info mr-1 text-moss"></i>Modo demo: usa cualquier correo y contraseña de 6 caracteres o más. No necesitas Firebase.</p>
+            <button id="authSubmit" type="submit" class="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-forest text-sm font-bold text-white transition hover:bg-moss">
+              Iniciar sesión <i class="fa-solid fa-arrow-right text-xs"></i>
+            </button>
+          </form>
+          <div class="my-5 flex items-center gap-3 text-[11px] text-muted"><span class="h-px flex-1 bg-line"></span>o continúa con<span class="h-px flex-1 bg-line"></span></div>
+          <button id="googleSignIn" class="flex h-12 w-full items-center justify-center gap-3 rounded-2xl border border-line text-sm font-semibold transition hover:bg-paper">
+            <i class="fa-brands fa-google text-base"></i> Google
+          </button>
+          <button id="guestSignIn" class="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-leaf/25 text-sm font-bold text-forest transition hover:bg-leaf/40">
+            Explorar como invitada <i class="fa-solid fa-arrow-right text-xs"></i>
+          </button>
+          <p class="mt-6 text-center text-sm text-muted">
+            <span id="authSwitchLabel">¿Todavía no tienes cuenta?</span>
+            <button id="authSwitch" type="button" class="ml-1 font-bold text-moss hover:text-forest">Regístrate</button>
+          </p>
+          <p class="mt-7 text-center text-[10px] leading-5 text-muted">Al continuar, aceptas nuestros términos y nuestra política de privacidad.<br>Camina con cuidado. Deja solo tus huellas. 🌿</p>
+        </div>
+      </section>
+
+      <!-- Explore -->
+      <section id="exploreScreen" class="screen min-h-screen pb-28">
+        <header class="px-5 pb-4 pt-6 md:px-10 md:pt-9">
+          <div class="flex items-center justify-between">
+            <a href="#" class="brand flex items-center gap-2.5" aria-label="EcoRuta inicio">
+              <span class="flex h-10 w-10 items-center justify-center rounded-[14px] bg-forest text-leaf"><i class="fa-solid fa-mountain-sun"></i></span>
+              <span class="font-display text-[19px] font-extrabold tracking-tight">Eco<span class="text-moss">Ruta</span></span>
+            </a>
+            <div class="flex items-center gap-2">
+              <button id="headerBookings" class="relative flex h-10 w-10 items-center justify-center rounded-full bg-white text-ink shadow-soft" aria-label="Ver mis reservas">
+                <i class="fa-regular fa-calendar-check"></i><span id="bookingBadge" class="absolute right-1 top-1 hidden h-2 w-2 rounded-full bg-clay ring-2 ring-white"></span>
+              </button>
+              <button data-screen="profile" class="profile-avatar flex h-10 w-10 items-center justify-center rounded-full bg-leaf/45 font-bold text-forest" aria-label="Mi perfil">L</button>
+            </div>
+          </div>
+          <div class="mt-8">
+            <p class="text-xs font-bold uppercase tracking-[.16em] text-moss">Tu próxima historia empieza aquí</p>
+            <h1 class="mt-2 max-w-[500px] font-display text-[29px] font-extrabold leading-[1.12] tracking-[-.04em] md:text-[38px]">Respira profundo.<br><span class="text-moss">Sal a descubrir.</span></h1>
+            <p class="mt-3 text-sm text-muted">Rutas verificadas para conectar con lo esencial.</p>
+          </div>
+          <div class="mt-6 flex h-[52px] items-center gap-3 rounded-2xl border border-line bg-white px-4 shadow-soft focus-within:border-moss">
+            <i class="fa-solid fa-magnifying-glass text-moss"></i>
+            <input id="routeSearch" type="search" class="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted/75" placeholder="Busca una ruta o región" aria-label="Buscar rutas">
+            <button id="filterButton" class="flex h-9 w-9 items-center justify-center rounded-xl bg-forest text-sm text-white transition hover:bg-moss" aria-label="Mostrar filtros">
+              <i class="fa-solid fa-sliders"></i>
+            </button>
+          </div>
+          <div id="filterPanel" class="mt-3 hidden rounded-2xl border border-line bg-white p-4 shadow-soft">
+            <div class="flex items-center justify-between">
+              <p class="text-sm font-bold">Dificultad</p><button id="clearFilters" class="text-xs font-semibold text-moss">Limpiar</button>
+            </div>
+            <div class="mt-3 flex flex-wrap gap-2">
+              <button class="difficulty-filter rounded-full border border-line px-3.5 py-2 text-xs font-semibold" data-difficulty="all">Todas</button>
+              <button class="difficulty-filter rounded-full border border-line px-3.5 py-2 text-xs font-semibold" data-difficulty="Fácil">Fácil</button>
+              <button class="difficulty-filter rounded-full border border-line px-3.5 py-2 text-xs font-semibold" data-difficulty="Moderada">Moderada</button>
+              <button class="difficulty-filter rounded-full border border-line px-3.5 py-2 text-xs font-semibold" data-difficulty="Difícil">Difícil</button>
+            </div>
+            <div class="mt-4 grid grid-cols-2 gap-3">
+              <label class="text-xs font-semibold">Distancia máxima
+                <select id="maxDistance" class="mt-1.5 h-10 w-full rounded-xl border border-line bg-white px-3 text-xs font-medium text-ink">
+                  <option value="0">Cualquier distancia</option><option value="5">Hasta 5 km</option><option value="8">Hasta 8 km</option><option value="15">Hasta 15 km</option>
+                </select>
+              </label>
+              <label class="text-xs font-semibold">Duración máxima
+                <select id="maxDuration" class="mt-1.5 h-10 w-full rounded-xl border border-line bg-white px-3 text-xs font-medium text-ink">
+                  <option value="0">Cualquier duración</option><option value="2">Hasta 2 horas</option><option value="3">Hasta 3 horas</option><option value="4">Hasta 4 horas</option><option value="6">Hasta 6 horas</option>
+                </select>
+              </label>
+            </div>
+          </div>
+        </header>
+        <div class="px-5 md:px-10">
+          <div class="hide-scrollbar flex gap-2 overflow-x-auto pb-1" id="categoryChips" aria-label="Categorías de rutas">
+            <button class="category-chip whitespace-nowrap rounded-full bg-forest px-4 py-2.5 text-xs font-bold text-white" data-category="Todas"><i class="fa-solid fa-compass mr-1.5"></i>Todas</button>
+            <button class="category-chip whitespace-nowrap rounded-full border border-line bg-white px-4 py-2.5 text-xs font-semibold text-muted" data-category="Montaña"><i class="fa-solid fa-mountain mr-1.5"></i>Montaña</button>
+            <button class="category-chip whitespace-nowrap rounded-full border border-line bg-white px-4 py-2.5 text-xs font-semibold text-muted" data-category="Cascadas"><i class="fa-solid fa-water mr-1.5"></i>Cascadas</button>
+            <button class="category-chip whitespace-nowrap rounded-full border border-line bg-white px-4 py-2.5 text-xs font-semibold text-muted" data-category="Miradores"><i class="fa-regular fa-eye mr-1.5"></i>Miradores</button>
+          </div>
+          <div class="mt-7 flex items-end justify-between">
+            <div><p class="text-[11px] font-bold uppercase tracking-[.15em] text-moss">Hecho para explorar</p><h2 class="mt-1 font-display text-xl font-extrabold tracking-tight">Rutas para ti</h2></div>
+            <span id="routeCount" class="pb-1 text-xs font-medium text-muted"></span>
+          </div>
+          <div id="routeGrid" class="mt-4 grid gap-4 md:grid-cols-2"></div>
+          <div id="emptyResults" class="hidden rounded-3xl border border-dashed border-line bg-white px-6 py-12 text-center">
+            <span class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-leaf/25 text-xl text-moss"><i class="fa-solid fa-leaf"></i></span>
+            <h3 class="mt-4 font-display font-bold">No encontramos esa ruta</h3>
+            <p class="mt-1 text-sm text-muted">Prueba con otro nombre, región o filtro.</p>
+          </div>
+          <div class="mt-7 flex items-center gap-4 rounded-3xl bg-forest p-5 text-white md:p-6">
+            <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-xl text-leaf"><i class="fa-solid fa-hands-holding-circle"></i></span>
+            <div><p class="font-display text-sm font-bold">Viaja ligero. Cuida mucho.</p><p class="mt-1 text-xs leading-5 text-white/70">Respeta la vida silvestre y conserva los senderos tal como los encontraste.</p></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Route details -->
+      <section id="detailScreen" class="screen min-h-screen pb-28">
+        <div class="relative h-[300px] md:h-[410px]">
+          <img id="detailImage" class="h-full w-full object-cover" alt="">
+          <div class="absolute inset-0 bg-gradient-to-b from-black/35 via-transparent to-black/35"></div>
+          <button id="backFromDetail" class="absolute left-5 top-6 flex h-11 w-11 items-center justify-center rounded-full bg-white/90 text-ink shadow-soft" aria-label="Volver a explorar"><i class="fa-solid fa-arrow-left"></i></button>
+          <button id="detailFavorite" class="absolute right-5 top-6 flex h-11 w-11 items-center justify-center rounded-full bg-white/90 text-ink shadow-soft" aria-label="Guardar en favoritos"><i class="fa-regular fa-heart"></i></button>
+          <div class="absolute bottom-5 left-5 right-5 text-white md:left-10 md:bottom-8">
+            <span id="detailCategory" class="rounded-full bg-white/20 px-3 py-1.5 text-[11px] font-bold backdrop-blur"></span>
+            <h1 id="detailTitle" class="mt-3 font-display text-[29px] font-extrabold leading-tight tracking-tight md:text-[38px]"></h1>
+            <p id="detailLocation" class="mt-1.5 text-sm text-white/90"><i class="fa-solid fa-location-dot mr-1.5"></i></p>
+          </div>
+        </div>
+        <div class="px-5 pt-5 md:px-10">
+          <div class="grid grid-cols-3 divide-x divide-line rounded-2xl border border-line bg-white py-4 shadow-soft">
+            <div class="text-center"><p class="text-[10px] font-semibold uppercase tracking-wider text-muted">Distancia</p><p id="detailDistance" class="mt-1 font-display text-lg font-extrabold"></p></div>
+            <div class="text-center"><p class="text-[10px] font-semibold uppercase tracking-wider text-muted">Duración</p><p id="detailDuration" class="mt-1 font-display text-lg font-extrabold"></p></div>
+            <div class="text-center"><p class="text-[10px] font-semibold uppercase tracking-wider text-muted">Desnivel</p><p id="detailElevation" class="mt-1 font-display text-lg font-extrabold"></p></div>
+          </div>
+          <div class="mt-6 grid gap-6 md:grid-cols-[1fr_1.1fr]">
+            <div>
+              <div class="flex items-center justify-between">
+                <h2 class="font-display text-lg font-extrabold">Sobre esta ruta</h2>
+                <span id="detailDifficulty" class="rounded-full bg-leaf/30 px-3 py-1 text-[11px] font-bold text-forest"></span>
+              </div>
+              <p id="detailDescription" class="mt-2 text-sm leading-6 text-muted"></p>
+              <div class="mt-4 flex flex-wrap gap-2" id="detailTags"></div>
+              <div class="mt-5 rounded-2xl border border-clay/20 bg-[#FFF7F2] p-4">
+                <p class="flex items-center gap-2 text-sm font-bold text-[#A84F2A]"><i class="fa-solid fa-shield-heart"></i>Antes de salir</p>
+                <p id="detailSafety" class="mt-1.5 text-xs leading-5 text-[#865F4E]"></p>
+              </div>
+            </div>
+            <div>
+              <div class="rounded-2xl border border-line bg-white p-4 shadow-soft">
+                <div class="flex items-center justify-between">
+                  <div><p class="text-[10px] font-bold uppercase tracking-wider text-muted">Ahora en la zona</p><p id="weatherPlace" class="mt-1 text-sm font-bold"></p></div>
+                  <i class="fa-solid fa-cloud-sun text-2xl text-[#D99345]"></i>
+                </div>
+                <div class="mt-3 flex items-end justify-between">
+                  <span id="weatherTemperature" class="font-display text-[32px] font-extrabold tracking-tight">--°</span>
+                  <span id="weatherDescription" class="pb-1 text-sm text-muted">Consultando clima…</span>
+                </div>
+                <div class="mt-3 flex items-center justify-between border-t border-line pt-3 text-xs text-muted">
+                  <span><i class="fa-solid fa-droplet mr-1 text-moss"></i><span id="weatherHumidity">--</span> humedad</span>
+                  <span><i class="fa-solid fa-cloud-rain mr-1 text-moss"></i><span id="weatherRain">--</span> lluvia</span>
+                </div>
+                <p id="weatherNote" class="mt-2 text-[10px] leading-4 text-muted"></p>
+              </div>
+              <div class="mt-5">
+                <div class="mb-2 flex items-center justify-between"><h2 class="font-display text-lg font-extrabold">Mapa del sendero</h2><span class="text-[10px] font-medium text-muted">OpenStreetMap</span></div>
+                <div id="routeMap" class="h-[220px] overflow-hidden rounded-2xl border border-line bg-[#E8EEE3] md:h-[246px]" aria-label="Mapa interactivo de la ruta"></div>
+                <p class="mt-2 text-[10px] leading-4 text-muted">Mapa de referencia. Confirma las condiciones y señalización local antes de iniciar tu recorrido.</p>
+              </div>
+            </div>
+          </div>
+          <div class="mt-7 rounded-3xl border border-line bg-white p-4 shadow-soft md:p-5">
+            <div class="flex items-center justify-between">
+              <div><p class="text-[10px] font-bold uppercase tracking-[.13em] text-moss">Anfitrión de la zona</p><h2 class="mt-1 font-display text-lg font-extrabold">Guías locales</h2></div>
+              <span class="rounded-full bg-leaf/25 px-2.5 py-1 text-[10px] font-bold text-forest"><i class="fa-solid fa-circle-check mr-1"></i>Verificados</span>
+            </div>
+            <div class="mt-4 flex items-center gap-3">
+              <img id="guideImage" class="h-12 w-12 rounded-2xl object-cover" alt="">
+              <div class="min-w-0 flex-1"><p id="guideName" class="text-sm font-bold"></p><p id="guideBio" class="mt-0.5 text-xs text-muted"></p></div>
+              <span id="guideRating" class="text-xs font-bold text-ink"><i class="fa-solid fa-star mr-1 text-[#E9AA47]"></i></span>
+            </div>
+            <button id="bookGuideButton" class="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-forest text-sm font-bold text-white transition hover:bg-moss"><i class="fa-regular fa-calendar-plus"></i>Solicitar guía local</button>
+          </div>
+          <div class="mt-4 text-center text-[10px] leading-5 text-muted"><i class="fa-solid fa-seedling mr-1 text-moss"></i>Tu visita responsable ayuda a conservar estos paisajes.</div>
+        </div>
+      </section>
+
+      <!-- Favorites -->
+      <section id="favoritesScreen" class="screen min-h-screen pb-28">
+        <header class="px-5 pb-5 pt-7 md:px-10 md:pt-10">
+          <p class="text-[11px] font-bold uppercase tracking-[.15em] text-moss">Tu próxima escapada</p>
+          <div class="mt-1 flex items-end justify-between">
+            <h1 class="font-display text-[28px] font-extrabold tracking-tight">Mis favoritos</h1>
+            <span id="favoriteCount" class="pb-1 text-xs font-semibold text-muted"></span>
+          </div>
+          <p class="mt-1 text-sm text-muted">Rutas que guardaste para volver a la naturaleza.</p>
+        </header>
+        <div id="favoritesList" class="space-y-3 px-5 md:px-10"></div>
+        <div id="emptyFavorites" class="mx-5 hidden rounded-3xl border border-dashed border-line bg-white px-6 py-12 text-center md:mx-10">
+          <span class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-leaf/25 text-xl text-moss"><i class="fa-regular fa-heart"></i></span>
+          <h2 class="mt-4 font-display font-bold">Aún no tienes favoritos</h2>
+          <p class="mt-1 text-sm text-muted">Guarda las rutas que te inspiren y aparecerán aquí.</p>
+          <button data-screen="explore" class="mt-5 rounded-xl bg-forest px-5 py-3 text-xs font-bold text-white">Descubrir rutas</button>
+        </div>
+      </section>
+
+      <!-- Profile / bookings -->
+      <section id="profileScreen" class="screen min-h-screen pb-28">
+        <header class="px-5 pb-5 pt-7 md:px-10 md:pt-10">
+          <div class="flex items-center justify-between">
+            <div><p class="text-[11px] font-bold uppercase tracking-[.15em] text-moss">Tu camino, a tu ritmo</p><h1 class="mt-1 font-display text-[28px] font-extrabold tracking-tight">Mi perfil</h1></div>
+            <button id="signOutButton" class="rounded-xl border border-line bg-white px-3 py-2 text-xs font-semibold text-muted"><i class="fa-solid fa-arrow-right-from-bracket mr-1"></i>Salir</button>
+          </div>
+        </header>
+        <div class="mx-5 rounded-3xl bg-forest p-5 text-white shadow-card md:mx-10 md:flex md:items-center md:gap-6 md:p-7">
+          <div class="flex items-center gap-4">
+            <div id="profileAvatarLarge" class="flex h-[62px] w-[62px] shrink-0 items-center justify-center rounded-[22px] bg-leaf text-2xl font-extrabold text-forest">L</div>
+            <div class="min-w-0"><p id="profileName" class="truncate font-display text-xl font-extrabold">Luisa Sánchez</p><p id="profileEmail" class="mt-1 truncate text-xs text-white/65">Senderista exploradora</p></div>
+          </div>
+          <div class="mt-5 grid grid-cols-3 divide-x divide-white/15 md:ml-auto md:mt-0 md:w-[390px]">
+            <div class="text-center"><p id="statRoutes" class="font-display text-xl font-extrabold">8</p><p class="mt-1 text-[10px] text-white/65">rutas</p></div>
+            <div class="text-center"><p id="statDistance" class="font-display text-xl font-extrabold">42</p><p class="mt-1 text-[10px] text-white/65">kilómetros</p></div>
+            <div class="text-center"><p id="statFavorites" class="font-display text-xl font-extrabold">0</p><p class="mt-1 text-[10px] text-white/65">favoritos</p></div>
+          </div>
+        </div>
+        <div class="px-5 md:px-10">
+          <div class="mt-7 flex items-center justify-between">
+            <div><p class="text-[10px] font-bold uppercase tracking-[.14em] text-moss">Organiza tu experiencia</p><h2 class="mt-1 font-display text-lg font-extrabold">Mis reservas</h2></div>
+            <span id="reservationCount" class="rounded-full bg-white px-3 py-1.5 text-[11px] font-bold text-muted shadow-soft"></span>
+          </div>
+          <div id="bookingsList" class="mt-3 space-y-3"></div>
+          <div id="emptyBookings" class="mt-3 rounded-2xl border border-dashed border-line bg-white p-5 text-center">
+            <i class="fa-regular fa-calendar text-2xl text-moss"></i><p class="mt-2 text-sm font-bold">Todavía no tienes solicitudes</p>
+            <p class="mt-1 text-xs text-muted">Al solicitar un guía, podrás consultar el estado de tu reserva aquí.</p>
+          </div>
+          <div class="mt-7">
+            <p class="text-[10px] font-bold uppercase tracking-[.14em] text-moss">Tu cuenta</p>
+            <div class="mt-3 divide-y divide-line overflow-hidden rounded-2xl border border-line bg-white">
+              <button id="experienceSetting" class="flex w-full items-center gap-3 p-4 text-left">
+                <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-leaf/25 text-moss"><i class="fa-solid fa-person-hiking"></i></span>
+                <span class="flex-1"><span class="block text-sm font-bold">Nivel de experiencia</span><span id="experienceLevel" class="mt-0.5 block text-xs text-muted">Intermedio</span></span><i class="fa-solid fa-chevron-right text-xs text-muted"></i>
+              </button>
+              <button id="preferencesSetting" class="flex w-full items-center gap-3 p-4 text-left">
+                <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-[#FFF1E9] text-clay"><i class="fa-solid fa-sliders"></i></span>
+                <span class="flex-1"><span class="block text-sm font-bold">Preferencias de rutas</span><span class="mt-0.5 block text-xs text-muted">Dificultad, distancia y región</span></span><i class="fa-solid fa-chevron-right text-xs text-muted"></i>
+              </button>
+              <div class="flex items-center gap-3 p-4">
+                <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-[#EAF0FA] text-[#5778A3]"><i class="fa-solid fa-shield-halved"></i></span>
+                <span class="flex-1"><span class="block text-sm font-bold">Privacidad y seguridad</span><span class="mt-0.5 block text-xs text-muted">Tus datos, bajo tu control</span></span><i class="fa-solid fa-chevron-right text-xs text-muted"></i>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <nav id="bottomNav" class="safe-bottom fixed inset-x-0 bottom-0 z-[800] hidden border-t border-line bg-white/95 px-2 pt-2 backdrop-blur md:left-1/2 md:w-[min(100%,1120px)] md:-translate-x-1/2 md:rounded-t-2xl" aria-label="Navegación principal">
+    <div class="mx-auto flex max-w-[520px] items-center justify-around">
+      <button data-screen="explore" class="nav-item flex min-w-[68px] flex-col items-center gap-1 rounded-xl px-3 py-1.5 text-[10px] font-semibold text-muted"><i class="fa-regular fa-compass text-[19px]"></i><span>Explorar</span></button>
+      <button data-screen="favorites" class="nav-item flex min-w-[68px] flex-col items-center gap-1 rounded-xl px-3 py-1.5 text-[10px] font-semibold text-muted"><i class="fa-regular fa-heart text-[19px]"></i><span>Favoritos</span></button>
+      <button id="navBookings" class="nav-item flex min-w-[68px] flex-col items-center gap-1 rounded-xl px-3 py-1.5 text-[10px] font-semibold text-muted"><span class="relative"><i class="fa-regular fa-calendar-check text-[19px]"></i><span id="navBookingBadge" class="absolute -right-1 -top-0.5 hidden h-2 w-2 rounded-full bg-clay"></span></span><span>Reservas</span></button>
+      <button data-screen="profile" class="nav-item flex min-w-[68px] flex-col items-center gap-1 rounded-xl px-3 py-1.5 text-[10px] font-semibold text-muted"><i class="fa-regular fa-user text-[19px]"></i><span>Perfil</span></button>
+    </div>
+  </nav>
+
+  <div id="bookingModal" class="modal-backdrop fixed inset-0 z-[1000] hidden items-end justify-center p-0 sm:items-center sm:p-5" role="dialog" aria-modal="true" aria-labelledby="bookingTitle">
+    <div class="w-full max-w-md rounded-t-[28px] bg-white p-5 pb-7 shadow-card sm:rounded-[28px]">
+      <div class="mx-auto mb-4 h-1 w-10 rounded-full bg-line sm:hidden"></div>
+      <div class="flex items-start justify-between">
+        <div><p class="text-[10px] font-bold uppercase tracking-[.15em] text-moss">Apoya el turismo local</p><h2 id="bookingTitle" class="mt-1 font-display text-xl font-extrabold">Solicitar un guía</h2><p id="bookingRouteName" class="mt-1 text-xs text-muted"></p></div>
+        <button id="closeBooking" class="flex h-9 w-9 items-center justify-center rounded-xl bg-paper text-muted" aria-label="Cerrar"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <form id="bookingForm" class="mt-5 space-y-4">
+        <div><label for="bookingDate" class="mb-1.5 block text-xs font-semibold">Fecha aproximada</label><input id="bookingDate" type="date" required class="h-12 w-full rounded-2xl border border-line bg-white px-4 text-sm"></div>
+        <div><label for="bookingPeople" class="mb-1.5 block text-xs font-semibold">Número de caminantes</label><select id="bookingPeople" class="h-12 w-full rounded-2xl border border-line bg-white px-4 text-sm"><option>1 persona</option><option>2 personas</option><option>3 personas</option><option>4 personas</option><option>5 o más personas</option></select></div>
+        <div><label for="bookingMessage" class="mb-1.5 block text-xs font-semibold">Mensaje para el guía <span class="font-normal text-muted">(opcional)</span></label><textarea id="bookingMessage" rows="3" class="w-full resize-none rounded-2xl border border-line px-4 py-3 text-sm outline-none focus:border-moss" placeholder="Cuéntale algo sobre tu grupo o la caminata..."></textarea></div>
+        <p class="text-[10px] leading-4 text-muted"><i class="fa-solid fa-circle-info mr-1 text-moss"></i>La solicitud no confirma la reserva. El guía se pondrá en contacto contigo.</p>
+        <button type="submit" class="h-12 w-full rounded-2xl bg-forest text-sm font-bold text-white transition hover:bg-moss">Enviar solicitud</button>
+      </form>
+    </div>
+  </div>
+  <div id="toast" class="fixed bottom-24 left-1/2 z-[1200] hidden max-w-[calc(100%-32px)] -translate-x-1/2 rounded-2xl bg-ink px-4 py-3 text-center text-xs font-semibold text-white shadow-card" role="status" aria-live="polite"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.2/anime.min.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script>
+    // Add your Firebase web-app settings before enabling email or Google authentication.
+    const firebaseConfig = {
+      apiKey: "YOUR_FIREBASE_API_KEY",
+      authDomain: "YOUR_PROJECT.firebaseapp.com",
+      projectId: "YOUR_PROJECT_ID",
+      appId: "YOUR_FIREBASE_APP_ID"
+    };
+    // Add an OpenWeather API key to replace the clearly labelled sample forecast.
+    const OPENWEATHER_API_KEY = "YOUR_OPENWEATHER_API_KEY";
+
+    const routes = [
+      {
+        id: 'chicaque', name: 'Bosque de niebla Chicaque', location: 'San Antonio del Tequendama, Cundinamarca',
+        shortLocation: 'Cundinamarca', category: 'Montaña', difficulty: 'Moderada', distance: '7.2 km', duration: '3 h', elevation: '480 m',
+        rating: '4.9', reviews: 128, image: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=1200&q=85',
+        description: 'Adéntrate en un bosque nublado de árboles centenarios, helechos y senderos cubiertos de musgo. Una escapada fresca cerca de Bogotá, con miradores naturales y una biodiversidad única.',
+        tags: ['Bosque de niebla', 'Avistamiento de aves', 'Caminata'], safety: 'Lleva impermeable y calzado con buen agarre: el sendero puede estar húmedo. Sal con tiempo y permanece en los caminos señalizados.',
+        coordinates: [4.6048, -74.3147], city: 'San Antonio del Tequendama', temperature: 17, weather: 'Nublado parcial', humidity: 78, rain: 25,
+        guide: { name: 'Andrés Cárdenas', role: 'Guía local · 6 años de experiencia', rating: '4.9', image: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=160&h=160&q=80' },
+        track: [[4.608, -74.322], [4.606, -74.319], [4.608, -74.315], [4.605, -74.312], [4.603, -74.309]]
+      },
+      {
+        id: 'cocora', name: 'Valle de Cocora', location: 'Salento, Quindío',
+        shortLocation: 'Quindío', category: 'Montaña', difficulty: 'Difícil', distance: '12.5 km', duration: '5 h', elevation: '760 m',
+        rating: '4.9', reviews: 342, image: 'https://images.unsplash.com/photo-1511497584788-876760111969?auto=format&fit=crop&w=1200&q=85',
+        description: 'Camina entre las palmas de cera más altas del mundo, cruza puentes sobre el río Quindío y descubre el paisaje cultural cafetero en una ruta inolvidable.',
+        tags: ['Palma de cera', 'Valle', 'Biodiversidad'], safety: 'Revisa el pronóstico antes de salir y lleva suficiente agua. La altura y los cambios de clima pueden hacer exigente el recorrido.',
+        coordinates: [4.6372, -75.4892], city: 'Salento', temperature: 16, weather: 'Lluvia ligera', humidity: 86, rain: 45,
+        guide: { name: 'María José Ocampo', role: 'Guía certificada · 8 años de experiencia', rating: '5.0', image: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=160&h=160&q=80' },
+        track: [[4.635, -75.496], [4.642, -75.493], [4.647, -75.487], [4.641, -75.482], [4.634, -75.481]]
+      },
+      {
+        id: 'quebrada', name: 'Cascada La Chorrera', location: 'Choachí, Cundinamarca',
+        shortLocation: 'Choachí', category: 'Cascadas', difficulty: 'Moderada', distance: '6.4 km', duration: '3.5 h', elevation: '590 m',
+        rating: '4.8', reviews: 96, image: 'https://images.unsplash.com/photo-1432405972618-c60b0225b8f9?auto=format&fit=crop&w=1200&q=85',
+        description: 'Sigue el murmullo del agua a través del bosque altoandino hasta llegar a una de las cascadas escalonadas más altas de Colombia.',
+        tags: ['Cascada', 'Bosque altoandino', 'Agua'], safety: 'El terreno cerca de la cascada puede ser resbaladizo. No ingreses al cañón si llueve con intensidad.',
+        coordinates: [4.5658, -73.9268], city: 'Choachí', temperature: 18, weather: 'Parcialmente nublado', humidity: 74, rain: 20,
+        guide: { name: 'Diego Ramírez', role: 'Anfitrión local · Primeros auxilios', rating: '4.8', image: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=160&h=160&q=80' },
+        track: [[4.561, -73.933], [4.565, -73.930], [4.568, -73.925], [4.566, -73.921]]
+      },
+      {
+        id: 'guatavita', name: 'Sendero Laguna de Guatavita', location: 'Sesquilé, Cundinamarca',
+        shortLocation: 'Sesquilé', category: 'Miradores', difficulty: 'Fácil', distance: '3.8 km', duration: '2 h', elevation: '240 m',
+        rating: '4.7', reviews: 184, image: 'https://images.unsplash.com/photo-1472396961693-142e6e269027?auto=format&fit=crop&w=1200&q=85',
+        description: 'Asciende hasta el borde de la laguna sagrada de los Muiscas y contempla un paisaje protegido entre montañas y páramo.',
+        tags: ['Páramo', 'Mirador', 'Cultura Muisca'], safety: 'El acceso tiene horarios y aforo regulados. Sigue las indicaciones del parque y evita salir de los senderos.',
+        coordinates: [5.1367, -73.7732], city: 'Sesquilé', temperature: 12, weather: 'Nublado', humidity: 82, rain: 30,
+        guide: { name: 'Camila Torres', role: 'Guía de naturaleza · Intérprete ambiental', rating: '4.9', image: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=160&h=160&q=80' },
+        track: [[5.139, -73.776], [5.141, -73.772], [5.137, -73.769], [5.134, -73.772]]
+      }
+    ];
+
+    const $ = (selector, root = document) => root.querySelector(selector);
+    const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
+    const storage = {
+      read(key, fallback) {
+        try { const value = localStorage.getItem(key); return value ? JSON.parse(value) : fallback; }
+        catch (error) { console.error(`No se pudo leer ${key} del almacenamiento local.`, error); return fallback; }
+      },
+      write(key, value) {
+        try { localStorage.setItem(key, JSON.stringify(value)); }
+        catch (error) { console.error(`No se pudo guardar ${key} en el almacenamiento local.`, error); showToast('No pudimos guardar tus cambios en este dispositivo.'); }
+      }
+    };
+    let favorites = storage.read('ecoruta:favorites', []);
+    let bookings = storage.read('ecoruta:bookings', []);
+    let profile = storage.read('ecoruta:profile', { name: 'Luisa Sánchez', email: '', experience: 'Intermedio', completed: 8, kilometers: 42 });
+    let sessionUser = storage.read('ecoruta:demo-session', null);
+    let authMode = 'login';
+    let activeScreen = 'login';
+    let currentRoute = routes[0];
+    let selectedDifficulty = 'all';
+    let selectedCategory = 'Todas';
+    let maxDistance = 0;
+    let maxDuration = 0;
+    let mapInstance = null;
+    let toastTimer;
+    let firebaseAuth = null;
+
+    function showToast(message) {
+      const toast = $('#toast');
+      toast.textContent = message;
+      toast.classList.remove('hidden');
+      toast.classList.add('toast-enter');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { toast.classList.add('hidden'); toast.classList.remove('toast-enter'); }, 3200);
+    }
+
+    function isConfigured(value) {
+      return value && !Object.values(value).some(item => typeof item === 'string' && item.includes('YOUR_'));
+    }
+
+    function startFirebase() {
+      if (!isConfigured(firebaseConfig)) return false;
+      if (!window.firebase || !firebase.apps) {
+        showToast('Firebase Auth no se pudo cargar. Revisa tu conexión e inténtalo de nuevo.');
+        return false;
+      }
+      if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+      firebaseAuth = firebase.auth();
+      return true;
+    }
+
+    function enterDemo(email, displayName) {
+      const cleanEmail = email.trim();
+      sessionUser = { email: cleanEmail, displayName: displayName || profile.name, isGuest: false };
+      profile = { ...profile, name: displayName || profile.name, email: cleanEmail };
+      storage.write('ecoruta:demo-session', sessionUser);
+      storage.write('ecoruta:profile', profile);
+      renderProfile();
+      showScreen('explore');
+      showToast('¡Listo! Entraste al modo demo. Tus cambios se guardan en este dispositivo.');
+    }
+
+    function showScreen(screen, options = {}) {
+      const allowed = ['login', 'explore', 'detail', 'favorites', 'profile'];
+      if (!allowed.includes(screen)) return;
+      const previous = activeScreen;
+      activeScreen = screen;
+      $$('.screen').forEach(section => section.classList.toggle('active', section.id === `${screen}Screen`));
+      $('#bottomNav').classList.toggle('hidden', screen === 'login');
+      $$('.nav-item').forEach(button => {
+        const selected = button.dataset.screen === screen || (button.id === 'navBookings' && screen === 'profile' && options.section === 'bookings');
+        button.classList.toggle('text-forest', selected);
+        button.classList.toggle('text-muted', !selected);
+        const icon = $('i', button);
+        if (icon && selected && button.dataset.screen === 'favorites') icon.className = 'fa-solid fa-heart text-[19px]';
+        else if (icon && button.dataset.screen === 'favorites') icon.className = 'fa-regular fa-heart text-[19px]';
+      });
+      $('#bottomNav').dataset.profileSection = options.section || 'overview';
+      if (screen === 'detail' && currentRoute) {
+        renderDetails(currentRoute);
+        requestAnimationFrame(() => {
+          if (mapInstance) mapInstance.invalidateSize();
+          else initializeMap(currentRoute);
+        });
+        loadWeather(currentRoute);
+      }
+      if (screen === 'favorites') renderFavorites();
+      if (screen === 'profile') {
+        renderProfile();
+        if (options.section === 'bookings') setTimeout(() => $('#bookingsList').scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+      }
+      if (previous !== screen && window.anime) {
+        const panel = $(`#${screen}Screen`);
+        if (panel && screen !== 'login') anime({ targets: panel, opacity: [0.5, 1], translateY: [8, 0], duration: 260, easing: 'easeOutQuad' });
+      }
+      window.scrollTo({ top: 0, behavior: 'instant' });
+    }
+
+    function updateAuthUI() {
+      const signup = authMode === 'signup';
+      $('#authHeading').textContent = signup ? 'Únete a EcoRuta' : 'Qué bueno tenerte aquí';
+      $('#authSubheading').textContent = signup ? 'Crea tu cuenta y empieza a explorar.' : 'Inicia sesión y encuentra tu próxima aventura.';
+      $('#authSubmit').innerHTML = signup ? 'Crear cuenta <i class="fa-solid fa-arrow-right text-xs"></i>' : 'Iniciar sesión <i class="fa-solid fa-arrow-right text-xs"></i>';
+      $('#authSwitchLabel').textContent = signup ? '¿Ya tienes una cuenta?' : '¿Todavía no tienes cuenta?';
+      $('#authSwitch').textContent = signup ? 'Inicia sesión' : 'Regístrate';
+      $('#nameField').classList.toggle('hidden', !signup);
+      $('#authPassword').autocomplete = signup ? 'new-password' : 'current-password';
+      $('#forgotPassword').classList.toggle('hidden', signup);
+    }
+
+    function renderRouteCard(route) {
+      const saved = favorites.includes(route.id);
+      return `<article class="route-card overflow-hidden rounded-[24px] border border-line bg-white shadow-soft transition hover:-translate-y-0.5 hover:shadow-card">
+          <div class="route-photo relative h-[174px] md:h-[190px]" style="background-image:url('${route.image}')">
+            <button class="open-route absolute inset-0 h-full w-full" data-route="${route.id}" aria-label="Ver detalles de ${route.name}"></button>
+            <span class="absolute left-3 top-3 rounded-full bg-white/90 px-3 py-1.5 text-[10px] font-bold text-forest backdrop-blur"><i class="fa-solid fa-circle-check mr-1 text-moss"></i>Ruta verificada</span>
+            <span class="absolute bottom-3 left-3 rounded-full bg-ink/70 px-3 py-1.5 text-[10px] font-semibold text-white backdrop-blur"><i class="fa-solid fa-location-dot mr-1"></i>${route.shortLocation}</span>
+            <button class="toggle-favorite absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-ink shadow-soft" data-favorite="${route.id}" aria-label="${saved ? 'Quitar de favoritos' : 'Guardar en favoritos'}"><i class="${saved ? 'fa-solid text-clay' : 'fa-regular'} fa-heart"></i></button>
+          </div>
+          <button class="open-route block w-full px-4 pb-4 pt-3 text-left" data-route="${route.id}">
+            <div class="flex items-center justify-between gap-2"><span class="text-[10px] font-bold uppercase tracking-[.12em] text-moss">${route.category}</span><span class="text-[11px] font-bold"><i class="fa-solid fa-star mr-1 text-[#E9AA47]"></i>${route.rating}<span class="font-medium text-muted"> (${route.reviews})</span></span></div>
+            <h3 class="mt-1.5 font-display text-[16px] font-extrabold leading-snug">${route.name}</h3>
+            <div class="mt-3 flex items-center justify-between gap-1 border-t border-line pt-3 text-[10px] font-semibold text-muted">
+              <span><i class="fa-solid fa-route mr-1 text-moss"></i>${route.distance}</span><span><i class="fa-regular fa-clock mr-1 text-moss"></i>${route.duration}</span><span><i class="fa-solid fa-person-hiking mr-1 text-moss"></i>${route.difficulty}</span>
+            </div>
+          </button>
+      </article>`;
+    }
+
+    function renderRoutes() {
+      const query = $('#routeSearch').value.trim().toLocaleLowerCase('es');
+      const result = routes.filter(route => {
+        const matchesText = `${route.name} ${route.location} ${route.category}`.toLocaleLowerCase('es').includes(query);
+        const matchesDifficulty = selectedDifficulty === 'all' || route.difficulty === selectedDifficulty;
+        const matchesCategory = selectedCategory === 'Todas' || route.category === selectedCategory;
+        const matchesDistance = !maxDistance || Number.parseFloat(route.distance) <= maxDistance;
+        const matchesDuration = !maxDuration || Number.parseFloat(route.duration) <= maxDuration;
+        return matchesText && matchesDifficulty && matchesCategory && matchesDistance && matchesDuration;
+      });
+      $('#routeGrid').innerHTML = result.map(renderRouteCard).join('');
+      $('#routeCount').textContent = `${result.length} ${result.length === 1 ? 'ruta' : 'rutas'}`;
+      $('#emptyResults').classList.toggle('hidden', result.length > 0);
+    }
+
+    function renderDetails(route) {
+      $('#detailImage').src = route.image;
+      $('#detailImage').alt = `Paisaje de ${route.name}`;
+      $('#detailCategory').textContent = route.category;
+      $('#detailTitle').textContent = route.name;
+      $('#detailLocation').innerHTML = `<i class="fa-solid fa-location-dot mr-1.5"></i>${route.location}`;
+      $('#detailDistance').textContent = route.distance;
+      $('#detailDuration').textContent = route.duration;
+      $('#detailElevation').textContent = route.elevation;
+      $('#detailDifficulty').textContent = route.difficulty;
+      $('#detailDescription').textContent = route.description;
+      $('#detailSafety').textContent = route.safety;
+      $('#detailTags').innerHTML = route.tags.map(tag => `<span class="rounded-full border border-line bg-white px-3 py-1.5 text-[10px] font-semibold text-muted">${tag}</span>`).join('');
+      $('#weatherPlace').textContent = route.city;
+      $('#weatherNote').textContent = isConfigured({ key: OPENWEATHER_API_KEY }) ? 'Pronóstico de las próximas horas desde OpenWeather.' : 'Datos de referencia para demostración; conecta OpenWeather para ver el clima en tiempo real.';
+      const saved = favorites.includes(route.id);
+      $('#detailFavorite').innerHTML = `<i class="${saved ? 'fa-solid text-clay' : 'fa-regular'} fa-heart"></i>`;
+      $('#detailFavorite').setAttribute('aria-label', saved ? 'Quitar de favoritos' : 'Guardar en favoritos');
+      $('#guideImage').src = route.guide.image;
+      $('#guideImage').alt = `Retrato de ${route.guide.name}`;
+      $('#guideName').textContent = route.guide.name;
+      $('#guideBio').textContent = route.guide.role;
+      $('#guideRating').innerHTML = `<i class="fa-solid fa-star mr-1 text-[#E9AA47]"></i>${route.guide.rating}`;
+      $('#bookingRouteName').textContent = route.name;
+    }
+
+    function initializeMap(route) {
+      const mapEl = $('#routeMap');
+      if (!mapEl || !window.L) {
+        if (mapEl) mapEl.innerHTML = '<div class="flex h-full flex-col items-center justify-center gap-2 px-6 text-center text-sm text-muted"><i class="fa-solid fa-map-location-dot text-2xl text-moss"></i>El mapa necesita conexión a internet y Leaflet.js.</div>';
+        return;
+      }
+      if (mapInstance) {
+        mapInstance.remove();
+        mapInstance = null;
+      }
+      mapEl.innerHTML = '';
+      mapInstance = L.map(mapEl, { scrollWheelZoom: false, zoomControl: true });
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        maxZoom: 19
+      }).addTo(mapInstance);
+      const trail = L.polyline(route.track, { color: '#597A4A', weight: 5, opacity: .88, lineCap: 'round', lineJoin: 'round' }).addTo(mapInstance);
+      L.circleMarker(route.track[0], { radius: 7, color: '#fff', weight: 3, fillColor: '#597A4A', fillOpacity: 1 }).addTo(mapInstance).bindPopup(`<strong>Inicio del sendero</strong><br>${route.shortLocation}`);
+      L.circleMarker(route.track[route.track.length - 1], { radius: 7, color: '#fff', weight: 3, fillColor: '#E9784B', fillOpacity: 1 }).addTo(mapInstance).bindPopup('<strong>Fin del recorrido</strong>');
+      mapInstance.fitBounds(trail.getBounds(), { padding: [24, 24] });
+    }
+
+    async function loadWeather(route) {
+      if (!isConfigured({ key: OPENWEATHER_API_KEY })) {
+        $('#weatherTemperature').textContent = `${route.temperature}°`;
+        $('#weatherDescription').textContent = route.weather;
+        $('#weatherHumidity').textContent = `${route.humidity}%`;
+        $('#weatherRain').textContent = `${route.rain}%`;
+        return;
+      }
+      $('#weatherTemperature').textContent = '…';
+      $('#weatherDescription').textContent = 'Consultando…';
+      try {
+        const params = new URLSearchParams({ lat: route.coordinates[0], lon: route.coordinates[1], appid: OPENWEATHER_API_KEY, units: 'metric', lang: 'es', cnt: '1' });
+        const response = await fetch(`https://api.openweathermap.org/data/2.5/forecast?${params}`);
+        if (!response.ok) throw new Error(`OpenWeather respondió ${response.status}`);
+        const weather = await response.json();
+        const forecast = weather.list?.[0];
+        if (!forecast) throw new Error('OpenWeather no devolvió datos de pronóstico para esta ubicación.');
+        $('#weatherTemperature').textContent = `${Math.round(forecast.main.temp)}°`;
+        $('#weatherDescription').textContent = forecast.weather?.[0]?.description || 'Condición no disponible';
+        $('#weatherHumidity').textContent = `${forecast.main.humidity}%`;
+        $('#weatherRain').textContent = `${Math.round((forecast.pop || 0) * 100)}%`;
+        $('#weatherNote').textContent = 'Pronóstico de las próximas horas desde OpenWeather. Las condiciones de montaña pueden cambiar rápidamente.';
+      } catch (error) {
+        console.error('No se pudo consultar OpenWeather.', error);
+        $('#weatherTemperature').textContent = '—°';
+        $('#weatherDescription').textContent = 'Clima no disponible';
+        $('#weatherHumidity').textContent = '—';
+        $('#weatherRain').textContent = '—';
+        $('#weatherNote').textContent = 'No logramos consultar el clima. Revisa la conexión o la clave de OpenWeather.';
+      }
+    }
+
+    function renderFavorites() {
+      const savedRoutes = routes.filter(route => favorites.includes(route.id));
+      $('#favoriteCount').textContent = `${savedRoutes.length} ${savedRoutes.length === 1 ? 'guardada' : 'guardadas'}`;
+      $('#favoritesList').innerHTML = savedRoutes.map(route => `<article class="flex gap-3 rounded-2xl border border-line bg-white p-3 shadow-soft">
+        <button class="open-route route-photo h-[90px] w-[96px] shrink-0 rounded-xl" style="background-image:url('${route.image}')" data-route="${route.id}" aria-label="Ver ${route.name}"></button>
+        <div class="min-w-0 flex-1 py-0.5">
+          <div class="flex items-center justify-between gap-2"><span class="text-[9px] font-bold uppercase tracking-wider text-moss">${route.category}</span><button class="remove-favorite flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted hover:bg-[#FFF1E9] hover:text-clay" data-favorite="${route.id}" aria-label="Eliminar ${route.name} de favoritos"><i class="fa-solid fa-trash-can text-xs"></i></button></div>
+          <button class="open-route mt-1 block text-left font-display text-sm font-extrabold leading-snug" data-route="${route.id}">${route.name}</button>
+          <p class="mt-1 text-[10px] text-muted"><i class="fa-solid fa-location-dot mr-1"></i>${route.shortLocation} <span class="mx-1">·</span>${route.distance}</p>
+          <button class="open-route mt-2 text-[10px] font-bold text-moss" data-route="${route.id}">Ver ruta <i class="fa-solid fa-arrow-right ml-1"></i></button>
+        </div>
+      </article>`).join('');
+      $('#emptyFavorites').classList.toggle('hidden', savedRoutes.length > 0);
+    }
+
+    function renderProfile() {
+      $('#profileName').textContent = profile.name || 'Senderista EcoRuta';
+      $('#profileEmail').textContent = profile.email || 'Explorando como invitada';
+      $('#profileAvatarLarge').textContent = (profile.name || 'E').trim().charAt(0).toLocaleUpperCase('es');
+      $$('.profile-avatar').forEach(avatar => { avatar.textContent = (profile.name || 'E').trim().charAt(0).toLocaleUpperCase('es'); });
+      $('#signOutButton').innerHTML = sessionUser && !sessionUser.isGuest
+        ? '<i class="fa-solid fa-arrow-right-from-bracket mr-1"></i>Cerrar sesión'
+        : '<i class="fa-solid fa-arrow-right-to-bracket mr-1"></i>Iniciar sesión';
+      $('#statRoutes').textContent = profile.completed || 0;
+      $('#statDistance').textContent = profile.kilometers || 0;
+      $('#statFavorites').textContent = favorites.length;
+      $('#experienceLevel').textContent = profile.experience || 'Intermedio';
+      $('#reservationCount').textContent = `${bookings.length} ${bookings.length === 1 ? 'solicitud' : 'solicitudes'}`;
+      $('#emptyBookings').classList.toggle('hidden', bookings.length > 0);
+      $('#bookingsList').innerHTML = bookings.map((booking, index) => {
+        const route = routes.find(item => item.id === booking.routeId);
+        if (!route) return '';
+        const date = new Date(`${booking.date}T12:00:00`).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' });
+        return `<article class="rounded-2xl border border-line bg-white p-4 shadow-soft">
+          <div class="flex items-start justify-between gap-3"><div><p class="text-[10px] font-bold uppercase tracking-wider text-moss">Solicitud enviada</p><h3 class="mt-1 font-display text-sm font-extrabold">${route.name}</h3></div><span class="rounded-full bg-[#FFF2DC] px-2.5 py-1 text-[10px] font-bold text-[#946D20]">Pendiente</span></div>
+          <div class="mt-3 flex items-center justify-between border-t border-line pt-3 text-[10px] text-muted"><span><i class="fa-regular fa-calendar mr-1"></i>${date}</span><span><i class="fa-solid fa-person mr-1"></i>${booking.people}</span><button class="cancel-booking font-semibold text-clay" data-booking="${index}">Cancelar</button></div>
+        </article>`;
+      }).join('');
+      $('#bookingBadge').classList.toggle('hidden', bookings.length === 0);
+      $('#navBookingBadge').classList.toggle('hidden', bookings.length === 0);
+    }
+
+    function toggleFavorite(id) {
+      favorites = favorites.includes(id) ? favorites.filter(item => item !== id) : [...favorites, id];
+      storage.write('ecoruta:favorites', favorites);
+      renderRoutes();
+      if (activeScreen === 'detail') renderDetails(currentRoute);
+      if (activeScreen === 'favorites') renderFavorites();
+      renderProfile();
+      const route = routes.find(item => item.id === id);
+      showToast(favorites.includes(id) ? `${route.name} se guardó en favoritos.` : `${route.name} se quitó de favoritos.`);
+    }
+
+    function openRoute(id) {
+      const route = routes.find(item => item.id === id);
+      if (!route) return;
+      if (mapInstance) {
+        mapInstance.remove();
+        mapInstance = null;
+      }
+      currentRoute = route;
+      showScreen('detail');
+    }
+
+    document.addEventListener('click', event => {
+      const screenButton = event.target.closest('[data-screen]');
+      if (screenButton) {
+        showScreen(screenButton.dataset.screen);
+        return;
+      }
+      const routeButton = event.target.closest('.open-route');
+      if (routeButton) {
+        openRoute(routeButton.dataset.route);
+        return;
+      }
+      const favoriteButton = event.target.closest('.toggle-favorite, .remove-favorite');
+      if (favoriteButton) {
+        toggleFavorite(favoriteButton.dataset.favorite);
+        return;
+      }
+      const cancelButton = event.target.closest('.cancel-booking');
+      if (cancelButton) {
+        bookings.splice(Number(cancelButton.dataset.booking), 1);
+        storage.write('ecoruta:bookings', bookings);
+        renderProfile();
+        showToast('La solicitud se eliminó de tus reservas.');
+      }
+    });
+
+    $('#navBookings').addEventListener('click', () => showScreen('profile', { section: 'bookings' }));
+    $('#headerBookings').addEventListener('click', () => showScreen('profile', { section: 'bookings' }));
+    $('#backFromDetail').addEventListener('click', () => showScreen('explore'));
+    $('#detailFavorite').addEventListener('click', () => toggleFavorite(currentRoute.id));
+    $('#routeSearch').addEventListener('input', renderRoutes);
+    $('#filterButton').addEventListener('click', () => $('#filterPanel').classList.toggle('hidden'));
+    $('#clearFilters').addEventListener('click', () => {
+      selectedDifficulty = 'all';
+      maxDistance = 0;
+      maxDuration = 0;
+      $('#maxDistance').value = '0';
+      $('#maxDuration').value = '0';
+      $$('.difficulty-filter').forEach(button => button.classList.remove('border-moss', 'bg-leaf/30', 'text-forest'));
+      setCategory('Todas');
+      renderRoutes();
+    });
+    $('#maxDistance').addEventListener('change', event => {
+      maxDistance = Number(event.target.value);
+      renderRoutes();
+    });
+    $('#maxDuration').addEventListener('change', event => {
+      maxDuration = Number(event.target.value);
+      renderRoutes();
+    });
+
+    function setCategory(category) {
+      selectedCategory = category;
+      $$('.category-chip').forEach(button => {
+        const active = button.dataset.category === category;
+        button.className = `category-chip whitespace-nowrap rounded-full px-4 py-2.5 text-xs ${active ? 'bg-forest font-bold text-white' : 'border border-line bg-white font-semibold text-muted'}`;
+      });
+      renderRoutes();
+    }
+
+    $$('.category-chip').forEach(button => button.addEventListener('click', () => setCategory(button.dataset.category)));
+    $$('.difficulty-filter').forEach(button => button.addEventListener('click', () => {
+      selectedDifficulty = button.dataset.difficulty;
+      $$('.difficulty-filter').forEach(filter => filter.classList.remove('border-moss', 'bg-leaf/30', 'text-forest'));
+      button.classList.add('border-moss', 'bg-leaf/30', 'text-forest');
+      renderRoutes();
+    }));
+
+    $('#authSwitch').addEventListener('click', () => {
+      authMode = authMode === 'login' ? 'signup' : 'login';
+      updateAuthUI();
+    });
+
+    $('#authForm').addEventListener('submit', async event => {
+      event.preventDefault();
+      const email = $('#authEmail').value.trim();
+      const password = $('#authPassword').value;
+      if (!startFirebase()) {
+        const displayName = authMode === 'signup' ? $('#authName').value.trim() : '';
+        enterDemo(email, displayName);
+        return;
+      }
+      const submit = $('#authSubmit');
+      submit.disabled = true;
+      try {
+        let credential;
+        if (authMode === 'signup') {
+          credential = await firebaseAuth.createUserWithEmailAndPassword(email, password);
+          const displayName = $('#authName').value.trim();
+          if (displayName) await credential.user.updateProfile({ displayName });
+        } else credential = await firebaseAuth.signInWithEmailAndPassword(email, password);
+        sessionUser = credential.user;
+        profile = { ...profile, name: sessionUser.displayName || profile.name, email: sessionUser.email || email };
+        storage.write('ecoruta:profile', profile);
+        showScreen('explore');
+        showToast(authMode === 'signup' ? 'Tu cuenta EcoRuta está lista.' : `¡Qué bueno verte, ${profile.name}!`);
+      } catch (error) {
+        console.error('Falló la autenticación de Firebase.', error);
+        const messages = {
+          'auth/invalid-email': 'Escribe un correo electrónico válido.',
+          'auth/user-not-found': 'No encontramos una cuenta con ese correo.',
+          'auth/wrong-password': 'La contraseña no es correcta.',
+          'auth/invalid-credential': 'El correo o la contraseña no son correctos.',
+          'auth/email-already-in-use': 'Ya existe una cuenta con ese correo.',
+          'auth/weak-password': 'Elige una contraseña de al menos 6 caracteres.',
+          'auth/network-request-failed': 'No pudimos conectar con Firebase. Revisa tu conexión.'
+        };
+        showToast(messages[error.code] || `No pudimos autenticarte: ${error.message}`);
+      } finally {
+        submit.disabled = false;
+      }
+    });
+
+    $('#googleSignIn').addEventListener('click', async () => {
+      if (!startFirebase()) {
+        enterDemo(profile.email || 'exploradora@demo.ecoruta', profile.name || 'Exploradora EcoRuta');
+        return;
+      }
+      try {
+        const credential = await firebaseAuth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
+        sessionUser = credential.user;
+        profile = { ...profile, name: sessionUser.displayName || profile.name, email: sessionUser.email || '' };
+        storage.write('ecoruta:profile', profile);
+        showScreen('explore');
+      } catch (error) {
+        console.error('Falló el inicio de sesión con Google.', error);
+        showToast(`No pudimos iniciar sesión con Google: ${error.message}`);
+      }
+    });
+
+    $('#guestSignIn').addEventListener('click', () => {
+      sessionUser = { isGuest: true, displayName: 'Invitada' };
+      storage.write('ecoruta:demo-session', sessionUser);
+      showScreen('explore');
+      showToast('Estás explorando como invitada. Tus favoritos se guardan en este dispositivo.');
+    });
+
+    $('#forgotPassword').addEventListener('click', async () => {
+      const email = $('#authEmail').value.trim();
+      if (!email) {
+        showToast('Escribe tu correo electrónico para recuperar la contraseña.');
+        $('#authEmail').focus();
+        return;
+      }
+      if (!startFirebase()) {
+        showToast('La recuperación de contraseña necesita tu configuración de Firebase.');
+        return;
+      }
+      try {
+        await firebaseAuth.sendPasswordResetEmail(email);
+        showToast('Si existe una cuenta para este correo, recibirás un enlace para restablecer la contraseña.');
+      } catch (error) {
+        console.error('Falló el envío de recuperación de contraseña.', error);
+        showToast(`No pudimos enviar el enlace: ${error.message}`);
+      }
+    });
+
+    $('#signOutButton').addEventListener('click', async () => {
+      if (!sessionUser || sessionUser.isGuest) {
+        authMode = 'login';
+        updateAuthUI();
+        showScreen('login');
+        return;
+      }
+      if (firebaseAuth && sessionUser) {
+        try { await firebaseAuth.signOut(); }
+        catch (error) { console.error('Falló el cierre de sesión.', error); showToast('No pudimos cerrar la sesión. Inténtalo de nuevo.'); return; }
+      }
+      sessionUser = null;
+      storage.write('ecoruta:demo-session', null);
+      authMode = 'login';
+      updateAuthUI();
+      showScreen('login');
+    });
+
+    $('#experienceSetting').addEventListener('click', () => {
+      const levels = ['Principiante', 'Intermedio', 'Avanzado'];
+      const current = levels.indexOf(profile.experience);
+      profile.experience = levels[(current + 1) % levels.length];
+      storage.write('ecoruta:profile', profile);
+      renderProfile();
+      showToast(`Nivel de experiencia: ${profile.experience}.`);
+    });
+    $('#preferencesSetting').addEventListener('click', () => {
+      showScreen('explore');
+      $('#filterPanel').classList.remove('hidden');
+      $('#filterPanel').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+
+    $('#bookGuideButton').addEventListener('click', () => {
+      $('#bookingDate').min = new Date().toISOString().slice(0, 10);
+      $('#bookingForm').reset();
+      $('#bookingModal').classList.remove('hidden');
+      $('#bookingModal').classList.add('flex');
+    });
+    $('#closeBooking').addEventListener('click', closeBooking);
+    $('#bookingModal').addEventListener('click', event => { if (event.target === $('#bookingModal')) closeBooking(); });
+    document.addEventListener('keydown', event => { if (event.key === 'Escape') closeBooking(); });
+
+    function closeBooking() {
+      $('#bookingModal').classList.add('hidden');
+      $('#bookingModal').classList.remove('flex');
+    }
+
+    $('#bookingForm').addEventListener('submit', event => {
+      event.preventDefault();
+      const booking = {
+        routeId: currentRoute.id,
+        date: $('#bookingDate').value,
+        people: $('#bookingPeople').value,
+        message: $('#bookingMessage').value.trim(),
+        createdAt: new Date().toISOString()
+      };
+      bookings = [booking, ...bookings];
+      storage.write('ecoruta:bookings', bookings);
+      renderProfile();
+      closeBooking();
+      showToast('Solicitud enviada. Consulta el estado desde la pestaña Reservas.');
+    });
+
+    renderRoutes();
+    updateAuthUI();
+    renderProfile();
+    if (!isConfigured(firebaseConfig)) {
+      sessionUser = sessionUser || { isGuest: true, displayName: 'Invitada' };
+      if (!storage.read('ecoruta:demo-session', null)) storage.write('ecoruta:demo-session', sessionUser);
+      renderProfile();
+      showScreen('explore');
+    } else {
+      showScreen('login');
+    }
+    if (window.firebase?.auth && isConfigured(firebaseConfig)) {
+      startFirebase();
+      firebaseAuth.onAuthStateChanged(user => {
+        if (!user) return;
+        sessionUser = user;
+        profile = { ...profile, name: user.displayName || profile.name, email: user.email || '' };
+        storage.write('ecoruta:profile', profile);
+        if (activeScreen === 'login') showScreen('explore');
+      });
+    }
+  </script>
+</body>
+</html>
